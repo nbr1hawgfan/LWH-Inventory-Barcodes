@@ -269,11 +269,10 @@
   #printArea{ display:none; }
 
   @media print{
-    header.app, .layout > .filters, .main .toolbar, .table-wrap, .selection-bar, #toast{
+    header.app, .layout, .selection-bar, #toast{
       display:none !important;
     }
-    .main{ padding:0 !important; }
-    body{ background:#fff; }
+    body{ background:#fff; margin:0 !important; padding:0 !important; }
     #printArea{ display:block; }
 
     .label-page{
