@@ -111,15 +111,8 @@
   }
   .search-bar{
     display:flex; align-items:stretch; gap:10px;
-    max-width:1100px;
-  }
-  .search-col-select{
-    flex:0 0 170px;
-    border:1.5px solid var(--line-strong);
-    border-radius:var(--radius);
-    padding:0 12px;
-    font-size:13.5px; font-weight:600; color:var(--slate);
-    background:var(--paper);
+    max-width:720px;
+    margin:0 auto;
   }
   .search-input-wrap{
     flex:1;
@@ -134,12 +127,14 @@
   .search-input-wrap input{
     border:none; outline:none; background:transparent;
     font-size:16px; width:100%; color:var(--ink); font-family:inherit;
-    padding:11px 0;
+    padding:12px 0;
   }
   .search-bar .btn{ flex:0 0 auto; padding:0 22px; font-size:14px; }
-  .browse-all-hint{
-    margin-top:8px; font-size:12px; color:var(--slate);
+  .search-caption{
+    max-width:720px; margin:8px auto 0 auto;
+    font-size:12px; color:var(--slate); text-align:center;
   }
+  .search-caption b{ color:var(--slate); font-weight:700; }
   .browse-all-hint button{
     background:none; border:none; padding:0; color:var(--emerald-dark);
     font-weight:700; text-decoration:underline; cursor:pointer; font-family:inherit; font-size:12px;
@@ -187,7 +182,6 @@
     .filters{ order:2; border-top:1px solid var(--line); border-right:none !important; }
     .main{ order:1; }
     .search-bar{ flex-wrap:wrap; }
-    .search-col-select{ flex:1 1 100%; }
   }
   @media (max-width:860px){
     .layout{ top:auto; }
@@ -408,7 +402,7 @@
 <header class="app">
   <div class="title-block">
     <h1>LWH Inventory Lookup &amp; Label Printer</h1>
-    <span class="subtitle" id="syncSubtitle">Search by InvRec, BillTo, or any field to pull matching pallets</span>
+    <span class="subtitle" id="syncSubtitle">Search by InvRec or BillTo to pull all pallets on a load</span>
   </div>
   <div class="spacer"></div>
   <button class="ghost-btn" id="loadAllBtn" title="Load the entire sheet for broad browsing">📋 Load Everything</button>
@@ -416,16 +410,14 @@
 
 <div class="search-bar-wrap">
   <div class="search-bar">
-    <select id="searchColumnSelect" class="search-col-select">
-      <option value="">All Fields</option>
-    </select>
     <div class="search-input-wrap">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="quickSearchInput" placeholder="Search by InvRec, BillTo, LWH ID, or anything else…" autocomplete="off">
+      <input type="text" id="quickSearchInput" placeholder="Enter an InvRec or BillTo number…" autocomplete="off">
     </div>
     <button class="btn primary" id="searchBtn">Search</button>
     <button class="btn secondary" id="scanBtn" title="Scan a barcode or QR code">📷 Scan</button>
   </div>
+  <div class="search-caption">Searches <b>InvRec</b> and <b>BillTo</b> — pulls every pallet on that load. Need something else? Use <b>Load Everything</b> (top right) and filter by any column.</div>
 </div>
 
 <div class="scanner-overlay" id="scannerOverlay">
@@ -462,7 +454,7 @@
     </div>
 
     <div class="table-wrap" id="tableWrap">
-      <div class="empty-state">🔍 Search above by InvRec, BillTo, or any field to pull up matching pallets.<br><br>Or click <b>Load Everything</b> (top right) to browse the full sheet.</div>
+      <div class="empty-state">🔍 Enter an InvRec or BillTo number above to pull up every pallet on that load.<br><br>Need something else? Click <b>Load Everything</b> (top right) to browse the full sheet.</div>
     </div>
   </main>
 </div>
@@ -506,7 +498,6 @@ const RENDER_CAP = 800;
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   registerServiceWorker();
-  loadHeadersOnly();
 
   document.getElementById('loadAllBtn').addEventListener('click', loadEverything);
   document.getElementById('searchBtn').addEventListener('click', performSearch);
@@ -541,43 +532,17 @@ function registerServiceWorker(){
    Loading the entire sheet on page load is what caused multi-
    minute waits on hotspot connections: the JSON payload for a
    large sheet takes a long time to transfer over a weak signal.
-   Instead, the page loads just the column headers on start (a
-   tiny request), and every actual data pull is either a
-   server-side filtered search (small payload — the normal path
-   for "give me this InvRec's pallets") or an explicit
-   "Load Everything" for when broad browsing is actually wanted.
+   The default search targets InvRec + BillToRef specifically
+   (server-side, via TextFinder) — that's the daily workflow of
+   pulling every pallet on a load. "Load Everything" is still
+   available for the rare case broad browsing is actually wanted.
    ============================================================ */
-async function loadHeadersOnly(){
-  if (!GAS_URL || GAS_URL.indexOf('PASTE_YOUR') === 0) {
-    renderConfigError();
-    return;
-  }
-  try {
-    const res = await fetch(GAS_URL + '?action=getHeaders', { cache: 'no-store' });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'Unknown error from backend');
-    populateSearchColumnOptions(json.headers);
-  } catch (err) {
-    showToast('Could not reach the sheet — check your connection');
-  }
-}
-
-function populateSearchColumnOptions(headers){
-  const sel = document.getElementById('searchColumnSelect');
-  sel.innerHTML = '<option value="">All Fields</option>' +
-    headers.map(h => '<option value="' + escapeHtml(h) + '">' + escapeHtml(prettyLabel(h)) + '</option>').join('');
-
-  // Default to InvRec if present — matches the most common daily workflow
-  const invRec = headers.find(h => h.toLowerCase().replace(/[_\s]/g,'') === 'invrec');
-  if (invRec) sel.value = invRec;
-}
 
 async function performSearch(){
   const query = document.getElementById('quickSearchInput').value.trim();
-  const column = document.getElementById('searchColumnSelect').value;
 
   if (!query) {
-    showToast('Type something to search, or use Load Everything');
+    showToast('Type an InvRec or BillTo number to search, or use Load Everything');
     return;
   }
   if (!GAS_URL || GAS_URL.indexOf('PASTE_YOUR') === 0) {
@@ -589,17 +554,15 @@ async function performSearch(){
   document.getElementById('syncSubtitle').textContent = 'Searching…';
 
   try {
-    const url = GAS_URL + '?action=search&q=' + encodeURIComponent(query) +
-      (column ? '&column=' + encodeURIComponent(column) : '');
+    const url = GAS_URL + '?action=search&q=' + encodeURIComponent(query);
     const res = await fetch(url, { cache: 'no-store' });
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Unknown error from backend');
 
     loadResultSet(json.data);
-    const label = column ? prettyLabel(column) : 'all fields';
     document.getElementById('syncSubtitle').textContent =
-      state.rows.length.toLocaleString() + ' result' + (state.rows.length === 1 ? '' : 's') +
-      ' for "' + query + '" in ' + label + ' · ' + new Date().toLocaleTimeString();
+      state.rows.length.toLocaleString() + ' pallet' + (state.rows.length === 1 ? '' : 's') +
+      ' found for "' + query + '" · ' + new Date().toLocaleTimeString();
     showToast(state.rows.length.toLocaleString() + ' result' + (state.rows.length === 1 ? '' : 's') + ' found');
   } catch (err) {
     renderFetchError(err.message);
@@ -658,7 +621,7 @@ function renderConfigError(){
 function renderFetchError(msg){
   document.getElementById('tableWrap').innerHTML =
     '<div class="error-state">⚠ Could not load data.<br><span class="mono" style="font-size:12px;">' + escapeHtml(msg) + '</span><br><button class="btn secondary" onclick="performSearch()">Try again</button></div>';
-  document.getElementById('syncSubtitle').textContent = 'Search by InvRec, BillTo, or any field to pull matching pallets';
+  document.getElementById('syncSubtitle').textContent = 'Search by InvRec or BillTo to pull all pallets on a load';
 }
 
 /* ============================================================
