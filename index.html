@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>LWH Inventory Lookup &amp; Label Printer</title>
+<meta name="theme-color" content="#0F172A">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+<style>
+  :root{
+    --ink:#0F172A;
+    --paper:#F8FAFC;
+    --panel:#FFFFFF;
+    --line:#E2E8F0;
+    --line-strong:#CBD5E1;
+    --slate:#475569;
+    --slate-light:#94A3B8;
+    --emerald:#059669;
+    --emerald-dark:#047857;
+    --emerald-wash:#ECFDF5;
+    --amber:#D97706;
+    --amber-wash:#FFFBEB;
+    --danger:#DC2626;
+    --danger-wash:#FEF2F2;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  /* ---------- Header ---------- */
+  header.app{
+    position:sticky; top:0; z-index:20;
+    background:var(--ink);
+    color:#fff;
+    padding:14px 20px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    overflow:hidden;
+    box-shadow:var(--shadow);
+  }
+  header.app::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:repeating-linear-gradient(90deg,
+      #fff 0 2px, transparent 2px 5px,
+      #fff 5px 6px, transparent 6px 11px,
+      #fff 11px 14px, transparent 14px 20px);
+    opacity:0.05;
+    pointer-events:none;
+  }
+  header.app .title-block{ position:relative; display:flex; flex-direction:column; gap:2px; }
+  header.app h1{
+    margin:0; font-size:16px; font-weight:800; letter-spacing:0.01em;
+  }
+  header.app .subtitle{
+    font-size:11.5px; color:#CBD5E1; font-weight:500;
+  }
+  header.app .spacer{ flex:1; }
+  .status-pill{
+    position:relative;
+    display:flex; align-items:center; gap:7px;
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.14);
+    border-radius:999px;
+    padding:6px 12px;
+    font-size:12.5px; font-weight:600;
+  }
+  .status-dot{ width:7px; height:7px; border-radius:50%; background:var(--slate-light); }
+  .status-dot.ok{ background:#34D399; }
+  .status-dot.err{ background:#F87171; }
+  .status-dot.loading{ background:#FBBF24; animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  button.ghost-btn{
+    position:relative;
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.16);
+    color:#fff;
+    border-radius:8px;
+    padding:8px 14px;
+    font-size:13px; font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  button.ghost-btn:hover{ background:rgba(255,255,255,0.16); }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:260px 1fr;
+    gap:0;
+    min-height:calc(100vh - 62px);
+  }
+  @media (max-width:860px){
+    .layout{ grid-template-columns:1fr; }
+    .filters{ order:2; border-top:1px solid var(--line); border-right:none !important; }
+    .main{ order:1; }
+  }
+
+  .filters{
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    padding:18px 16px;
+    display:flex; flex-direction:column; gap:18px;
+    align-self:start;
+    position:sticky; top:62px;
+    max-height:calc(100vh - 62px);
+    overflow-y:auto;
+  }
+  .filters h2{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--slate); margin:0 0 10px 0; font-weight:700;
+  }
+  .search-box{
+    display:flex; align-items:center; gap:8px;
+    border:1.5px solid var(--line-strong);
+    border-radius:var(--radius);
+    padding:9px 12px;
+    background:var(--paper);
+  }
+  .search-box input{
+    border:none; outline:none; background:transparent;
+    font-size:14px; width:100%; color:var(--ink); font-family:inherit;
+  }
+  .search-box svg{ flex-shrink:0; color:var(--slate-light); }
+
+  .filter-row{ display:flex; flex-direction:column; gap:8px; }
+  select, .add-filter-btn{
+    width:100%;
+    border:1.5px solid var(--line-strong);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:13px;
+    background:var(--panel);
+    color:var(--ink);
+    font-family:inherit;
+  }
+  .add-filter-btn{ cursor:pointer; color:var(--slate); font-weight:600; text-align:left; }
+  .add-filter-btn:hover{ border-color:var(--emerald); color:var(--emerald-dark); }
+
+  .active-filters{ display:flex; flex-direction:column; gap:6px; }
+  .chip{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    background:var(--emerald-wash);
+    border:1px solid #A7F3D0;
+    color:var(--emerald-dark);
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:12.5px; font-weight:600;
+  }
+  .chip button{
+    border:none; background:none; cursor:pointer; color:var(--emerald-dark);
+    font-size:14px; line-height:1; padding:0;
+  }
+  .clear-all{
+    font-size:12px; color:var(--slate); text-decoration:underline; cursor:pointer;
+    background:none; border:none; padding:0; font-family:inherit; text-align:left;
+  }
+
+  /* ---------- Main / table ---------- */
+  .main{ padding:18px 20px 100px 20px; }
+  .toolbar{
+    display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;
+  }
+  .result-count{ font-size:13px; color:var(--slate); font-weight:600; }
+  .result-count b{ color:var(--ink); font-family:'IBM Plex Mono',monospace; }
+  .toolbar .spacer{ flex:1; }
+  .btn{
+    border:none; border-radius:8px; padding:9px 16px; font-size:13px; font-weight:700;
+    cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn.primary{ background:var(--emerald); color:#fff; }
+  .btn.primary:hover{ background:var(--emerald-dark); }
+  .btn.secondary{ background:var(--panel); color:var(--ink); border:1.5px solid var(--line-strong); }
+  .btn.secondary:hover{ border-color:var(--slate); }
+  .btn:disabled{ opacity:0.45; cursor:not-allowed; }
+
+  .table-wrap{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:auto;
+    box-shadow:var(--shadow);
+  }
+  table{ border-collapse:collapse; width:100%; font-size:13px; }
+  thead th{
+    position:sticky; top:0; z-index:5;
+    background:#F1F5F9;
+    text-align:left;
+    padding:10px 12px;
+    font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+    color:var(--slate); font-weight:700;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+    cursor:pointer;
+    user-select:none;
+  }
+  thead th:hover{ color:var(--ink); }
+  thead th .sort-arrow{ font-size:10px; margin-left:4px; color:var(--emerald); }
+  thead th.checkbox-col, td.checkbox-col{ width:38px; padding-left:14px; cursor:default; }
+  tbody td{
+    padding:9px 12px;
+    border-bottom:1px solid #F1F5F9;
+    white-space:nowrap;
+    color:var(--ink);
+  }
+  tbody tr:hover{ background:#F8FAFC; }
+  tbody tr.selected{ background:var(--emerald-wash); }
+  td.id-cell{ font-family:'IBM Plex Mono',monospace; font-weight:600; }
+  input[type="checkbox"]{ width:16px; height:16px; accent-color:var(--emerald); cursor:pointer; }
+
+  .empty-state, .error-state, .loading-state{
+    padding:60px 20px; text-align:center; color:var(--slate);
+  }
+  .error-state{ color:var(--danger); }
+  .error-state button{ margin-top:12px; }
+
+  .render-note{
+    padding:10px 14px; font-size:12px; color:var(--amber);
+    background:var(--amber-wash); border-top:1px solid #FDE68A;
+  }
+
+  /* ---------- Sticky selection bar ---------- */
+  .selection-bar{
+    position:fixed; left:50%; bottom:20px; transform:translateX(-50%) translateY(120%);
+    background:var(--ink); color:#fff;
+    border-radius:12px;
+    padding:12px 14px 12px 20px;
+    display:flex; align-items:center; gap:14px;
+    box-shadow:0 10px 30px rgba(15,23,42,0.35);
+    transition:transform 0.2s ease;
+    z-index:30;
+  }
+  .selection-bar.show{ transform:translateX(-50%) translateY(0); }
+  .selection-bar .count{ font-weight:700; font-size:13.5px; }
+  .selection-bar .count b{ color:#34D399; font-family:'IBM Plex Mono',monospace; }
+  .selection-bar button.link{
+    background:none; border:none; color:#94A3B8; font-size:12.5px; cursor:pointer; font-family:inherit;
+    text-decoration:underline;
+  }
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed; top:20px; left:50%; transform:translateX(-50%) translateY(-140%);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:8px;
+    font-size:13px; font-weight:600; z-index:100; transition:transform 0.2s ease;
+    box-shadow:var(--shadow);
+  }
+  #toast.show{ transform:translateX(-50%) translateY(0); }
+
+  /* ---------- Print area (hidden on screen) ---------- */
+  #printArea{ display:none; }
+
+  @media print{
+    header.app, .layout > .filters, .main .toolbar, .table-wrap, .selection-bar, #toast{
+      display:none !important;
+    }
+    .main{ padding:0 !important; }
+    body{ background:#fff; }
+    #printArea{ display:block; }
+
+    .label-page{
+      width:4in; height:6in;
+      padding:0.16in;
+      page-break-after:always;
+      display:flex; flex-direction:column;
+      font-family:'Inter',sans-serif;
+      color:#0F172A;
+    }
+    .label-page:last-child{ page-break-after:auto; }
+
+    @page{ size:4in 6in; margin:0; }
+
+    .label-top{
+      display:flex; justify-content:space-between; align-items:flex-start;
+      border-bottom:2px solid #0F172A; padding-bottom:0.08in; margin-bottom:0.1in;
+    }
+    .label-location{ font-size:15pt; font-weight:800; }
+    .label-bay{
+      font-size:10pt; font-weight:700; background:#0F172A; color:#fff;
+      padding:3px 9px; border-radius:5px;
+    }
+    .label-idblock{ text-align:center; margin-bottom:0.08in; }
+    .label-idblock .id-label{ font-size:8pt; letter-spacing:0.1em; color:#475569; font-weight:700; text-transform:uppercase; }
+    .label-idblock .id-value{ font-family:'IBM Plex Mono',monospace; font-size:17pt; font-weight:700; margin:1px 0 4px 0; }
+    .label-codes{ display:flex; align-items:center; justify-content:center; gap:0.18in; margin-bottom:0.1in; }
+    .label-codes svg{ height:0.55in; }
+    .label-codes canvas{ width:0.75in !important; height:0.75in !important; }
+
+    .label-secondary{
+      display:flex; align-items:center; justify-content:center; gap:0.12in;
+      border-top:1px dashed #CBD5E1; border-bottom:1px dashed #CBD5E1;
+      padding:0.06in 0; margin-bottom:0.1in;
+    }
+    .label-secondary .sec-label{ font-size:7.5pt; font-weight:700; color:#475569; text-transform:uppercase; }
+    .label-secondary .sec-value{ font-family:'IBM Plex Mono',monospace; font-size:9pt; font-weight:700; }
+    .label-secondary svg{ height:0.32in; }
+
+    .label-grid{
+      display:grid; grid-template-columns:1fr 1fr; gap:4px 10px;
+      font-size:8pt; flex:1;
+    }
+    .label-field{ overflow:hidden; }
+    .label-field .fk{ color:#475569; font-weight:700; text-transform:uppercase; font-size:6.8pt; letter-spacing:0.03em; }
+    .label-field .fv{ font-weight:600; word-break:break-word; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="title-block">
+    <h1>LWH Inventory Lookup &amp; Label Printer</h1>
+    <span class="subtitle" id="syncSubtitle">Loading data…</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="status-pill">
+    <span class="status-dot loading" id="statusDot"></span>
+    <span id="statusText">Connecting…</span>
+  </div>
+  <button class="ghost-btn" id="refreshBtn" title="Reload from sheet">↻ Refresh</button>
+</header>
+
+<div class="layout">
+  <aside class="filters">
+    <div>
+      <h2>Search</h2>
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="globalSearch" placeholder="Search any field…" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <h2>Column Filters</h2>
+      <select id="filterColumnSelect">
+        <option value="">+ Add filter by column…</option>
+      </select>
+      <select id="filterValueSelect" style="display:none;">
+        <option value="">Select value…</option>
+      </select>
+      <div class="active-filters" id="activeFilters"></div>
+      <button class="clear-all" id="clearAllFilters" style="display:none;">Clear all filters</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <div class="result-count"><b id="resultCount">0</b> <span id="resultLabel">records</span></div>
+      <div class="spacer"></div>
+      <button class="btn secondary" id="exportCsvBtn" disabled>⬇ Export CSV</button>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+      <div class="loading-state" id="loadingState">Loading inventory data…</div>
+    </div>
+  </main>
+</div>
+
+<div class="selection-bar" id="selectionBar">
+  <div class="count"><b id="selCount">0</b> selected</div>
+  <button class="btn primary" id="printLabelsBtn">🖨 Print Labels</button>
+  <button class="link" id="clearSelectionBtn">Clear</button>
+</div>
+
+<div id="toast"></div>
+<div id="printArea"></div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your deployed GAS Web App URL below
+   ============================================================ */
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyN6UBXflFzSrADpBSAlV04eywQK05d-YPZezIZTdtwbi8lbeNo1zFIMdue2VBowNSe2g/exec';
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  headers: [],
+  rows: [],
+  filtered: [],
+  columnFilters: {},   // { columnName: value }
+  search: '',
+  sortKey: null,
+  sortDir: 1,
+  selected: new Set(), // set of LWH_ID (or row index fallback)
+  idField: null,
+  customerIdField: null,
+  locationField: null,
+  bayField: null
+};
+
+const RENDER_CAP = 800;
+
+/* ============================================================
+   INIT
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  registerServiceWorker();
+  loadData();
+
+  document.getElementById('refreshBtn').addEventListener('click', () => loadData(true));
+  document.getElementById('globalSearch').addEventListener('input', (e) => {
+    state.search = e.target.value.trim().toLowerCase();
+    applyFilters();
+  });
+  document.getElementById('filterColumnSelect').addEventListener('change', onFilterColumnChange);
+  document.getElementById('filterValueSelect').addEventListener('change', onFilterValueChange);
+  document.getElementById('clearAllFilters').addEventListener('click', clearAllFilters);
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+  document.getElementById('printLabelsBtn').addEventListener('click', printSelectedLabels);
+  document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
+});
+
+function registerServiceWorker(){
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  }
+}
+
+/* ============================================================
+   DATA LOADING
+   ============================================================ */
+function setStatus(mode, text){
+  const dot = document.getElementById('statusDot');
+  const label = document.getElementById('statusText');
+  dot.className = 'status-dot ' + mode;
+  label.textContent = text;
+}
+
+async function loadData(isManualRefresh){
+  setStatus('loading', isManualRefresh ? 'Refreshing…' : 'Connecting…');
+  if (!GAS_URL || GAS_URL.indexOf('PASTE_YOUR') === 0) {
+    setStatus('err', 'Not configured');
+    renderConfigError();
+    return;
+  }
+  try {
+    const res = await fetch(GAS_URL + '?action=getData', { cache: 'no-store' });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Unknown error from backend');
+
+    state.headers = json.data.headers;
+    state.rows = json.data.rows;
+    detectKeyFields();
+    applyFilters();
+    buildColumnFilterOptions();
+
+    setStatus('ok', 'Connected');
+    const now = new Date();
+    document.getElementById('syncSubtitle').textContent =
+      state.rows.length.toLocaleString() + ' records · synced ' + now.toLocaleTimeString();
+    showToast(isManualRefresh ? 'Data refreshed' : 'Data loaded');
+  } catch (err) {
+    setStatus('err', 'Connection failed');
+    renderFetchError(err.message);
+  }
+}
+
+function detectKeyFields(){
+  const find = (patterns) => state.headers.find(h =>
+    patterns.some(p => h.toLowerCase().replace(/[_\s]/g,'') === p)
+  );
+  state.idField        = find(['lwhid','lwh']) || state.headers[0];
+  state.customerIdField= find(['customerid','custid']);
+  state.locationField  = find(['location','loc']);
+  state.bayField       = find(['bayname','bay']);
+}
+
+function renderConfigError(){
+  document.getElementById('tableWrap').innerHTML =
+    '<div class="error-state">⚠ GAS_URL is not set yet.<br>Open index.html and paste your deployed Web App URL into the GAS_URL constant near the top of the script.</div>';
+}
+function renderFetchError(msg){
+  document.getElementById('tableWrap').innerHTML =
+    '<div class="error-state">⚠ Could not load data.<br><span class="mono" style="font-size:12px;">' + escapeHtml(msg) + '</span><br><button class="btn secondary" onclick="loadData(true)">Try again</button></div>';
+}
+
+/* ============================================================
+   FILTERING / SEARCH / SORT
+   ============================================================ */
+function buildColumnFilterOptions(){
+  const sel = document.getElementById('filterColumnSelect');
+  sel.innerHTML = '<option value="">+ Add filter by column…</option>';
+  state.headers.forEach(h => {
+    const opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = prettyLabel(h);
+    sel.appendChild(opt);
+  });
+}
+
+function onFilterColumnChange(e){
+  const col = e.target.value;
+  const valSel = document.getElementById('filterValueSelect');
+  if (!col) { valSel.style.display = 'none'; return; }
+
+  const values = Array.from(new Set(state.rows.map(r => String(r[col] ?? '').trim()).filter(v => v !== '')))
+    .sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+
+  valSel.innerHTML = '<option value="">Select ' + prettyLabel(col) + ' value…</option>' +
+    values.map(v => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+  valSel.style.display = 'block';
+  valSel.dataset.column = col;
+}
+
+function onFilterValueChange(e){
+  const col = e.target.dataset.column;
+  const val = e.target.value;
+  if (!col || !val) return;
+
+  state.columnFilters[col] = val;
+  renderActiveFilters();
+  applyFilters();
+
+  document.getElementById('filterColumnSelect').value = '';
+  e.target.style.display = 'none';
+  e.target.value = '';
+}
+
+function renderActiveFilters(){
+  const wrap = document.getElementById('activeFilters');
+  const keys = Object.keys(state.columnFilters);
+  wrap.innerHTML = keys.map(col =>
+    '<div class="chip"><span>' + escapeHtml(prettyLabel(col)) + ': ' + escapeHtml(state.columnFilters[col]) + '</span>' +
+    '<button data-col="' + escapeHtml(col) + '">✕</button></div>'
+  ).join('');
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      delete state.columnFilters[btn.dataset.col];
+      renderActiveFilters();
+      applyFilters();
+    });
+  });
+  document.getElementById('clearAllFilters').style.display = keys.length ? 'block' : 'none';
+}
+
+function clearAllFilters(){
+  state.columnFilters = {};
+  renderActiveFilters();
+  applyFilters();
+}
+
+function applyFilters(){
+  let rows = state.rows;
+
+  Object.entries(state.columnFilters).forEach(([col, val]) => {
+    rows = rows.filter(r => String(r[col] ?? '').trim() === val);
+  });
+
+  if (state.search) {
+    rows = rows.filter(r =>
+      state.headers.some(h => String(r[h] ?? '').toLowerCase().includes(state.search))
+    );
+  }
+
+  if (state.sortKey) {
+    const key = state.sortKey, dir = state.sortDir;
+    rows = rows.slice().sort((a,b) => {
+      const av = a[key], bv = b[key];
+      const an = parseFloat(av), bn = parseFloat(bv);
+      let cmp;
+      if (!isNaN(an) && !isNaN(bn) && String(av).trim() !== '' && String(bv).trim() !== '') {
+        cmp = an - bn;
+      } else {
+        cmp = String(av ?? '').localeCompare(String(bv ?? ''), undefined, {numeric:true});
+      }
+      return cmp * dir;
+    });
+  }
+
+  state.filtered = rows;
+  renderTable();
+  renderCounts();
+}
+
+/* ============================================================
+   TABLE RENDER
+   ============================================================ */
+function renderCounts(){
+  document.getElementById('resultCount').textContent = state.filtered.length.toLocaleString();
+  document.getElementById('resultLabel').textContent = state.filtered.length === 1 ? 'record' : 'records';
+  document.getElementById('exportCsvBtn').disabled = state.filtered.length === 0;
+}
+
+function renderTable(){
+  const wrap = document.getElementById('tableWrap');
+
+  if (state.rows.length === 0) return; // still loading / error already shown
+
+  if (state.filtered.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">No records match your search or filters.</div>';
+    return;
+  }
+
+  const rowsToRender = state.filtered.slice(0, RENDER_CAP);
+  const truncated = state.filtered.length > RENDER_CAP;
+
+  let html = '<table><thead><tr><th class="checkbox-col"><input type="checkbox" id="selectAllBox"></th>';
+  state.headers.forEach(h => {
+    const arrow = state.sortKey === h ? (state.sortDir === 1 ? '▲' : '▼') : '';
+    html += '<th data-col="' + escapeHtml(h) + '">' + escapeHtml(prettyLabel(h)) +
+      (arrow ? ' <span class="sort-arrow">' + arrow + '</span>' : '') + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  rowsToRender.forEach(row => {
+    const rid = rowId(row);
+    const isSel = state.selected.has(rid);
+    html += '<tr class="' + (isSel ? 'selected' : '') + '" data-rid="' + escapeHtml(rid) + '">';
+    html += '<td class="checkbox-col"><input type="checkbox" class="rowCheck" ' + (isSel ? 'checked' : '') + '></td>';
+    state.headers.forEach(h => {
+      const isIdCol = h === state.idField || h === state.customerIdField;
+      html += '<td class="' + (isIdCol ? 'id-cell' : '') + '">' + escapeHtml(String(row[h] ?? '')) + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  if (truncated) {
+    html += '<div class="render-note">Showing first ' + RENDER_CAP.toLocaleString() + ' of ' + state.filtered.length.toLocaleString() +
+      ' matching records. Narrow your search to see more — CSV export and label printing still use the full filtered set.</div>';
+  }
+
+  wrap.innerHTML = html;
+  attachTableEvents(rowsToRender);
+}
+
+function attachTableEvents(rowsRendered){
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (state.sortKey === col) { state.sortDir *= -1; }
+      else { state.sortKey = col; state.sortDir = 1; }
+      applyFilters();
+    });
+  });
+
+  document.querySelectorAll('tr[data-rid]').forEach(tr => {
+    const rid = tr.dataset.rid;
+    const checkbox = tr.querySelector('.rowCheck');
+    checkbox.addEventListener('change', () => {
+      toggleSelect(rid, checkbox.checked);
+      tr.classList.toggle('selected', checkbox.checked);
+    });
+  });
+
+  const selectAll = document.getElementById('selectAllBox');
+  if (selectAll) {
+    selectAll.checked = rowsRendered.length > 0 && rowsRendered.every(r => state.selected.has(rowId(r)));
+    selectAll.addEventListener('change', () => {
+      rowsRendered.forEach(r => toggleSelect(rowId(r), selectAll.checked));
+      renderTable();
+      renderSelectionBar();
+    });
+  }
+}
+
+function rowId(row){
+  const idVal = state.idField ? row[state.idField] : null;
+  return (idVal !== null && idVal !== undefined && String(idVal).trim() !== '')
+    ? String(idVal)
+    : JSON.stringify(row);
+}
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+function toggleSelect(rid, on){
+  if (on) state.selected.add(rid); else state.selected.delete(rid);
+  renderSelectionBar();
+}
+
+function clearSelection(){
+  state.selected.clear();
+  renderTable();
+  renderSelectionBar();
+}
+
+function renderSelectionBar(){
+  const bar = document.getElementById('selectionBar');
+  const n = state.selected.size;
+  document.getElementById('selCount').textContent = n;
+  bar.classList.toggle('show', n > 0);
+}
+
+/* ============================================================
+   CSV EXPORT
+   ============================================================ */
+function exportCsv(){
+  const rows = state.filtered;
+  if (rows.length === 0) return;
+
+  const esc = (v) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+
+  let csv = state.headers.map(esc).join(',') + '\n';
+  rows.forEach(r => {
+    csv += state.headers.map(h => esc(r[h])).join(',') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.href = url;
+  a.download = 'lwh-inventory-export-' + stamp + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('CSV exported (' + rows.length.toLocaleString() + ' rows)');
+}
+
+/* ============================================================
+   LABEL PRINTING (4x6)
+   ============================================================ */
+async function printSelectedLabels(){
+  const selectedRows = state.rows.filter(r => state.selected.has(rowId(r)));
+  if (selectedRows.length === 0) return;
+
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = '';
+
+  const hiddenFields = [state.idField, state.customerIdField, state.locationField, state.bayField]
+    .filter(Boolean);
+  const remainingFields = state.headers.filter(h => !hiddenFields.includes(h));
+
+  const renderJobs = [];
+
+  selectedRows.forEach((row, i) => {
+    const idVal = state.idField ? String(row[state.idField] ?? '') : '';
+    const custVal = state.customerIdField ? String(row[state.customerIdField] ?? '').trim() : '';
+    const locVal = state.locationField ? String(row[state.locationField] ?? '') : '';
+    const bayVal = state.bayField ? String(row[state.bayField] ?? '') : '';
+
+    const page = document.createElement('div');
+    page.className = 'label-page';
+
+    const barcodeId = 'barcode-' + i;
+    const qrId = 'qr-' + i;
+    const secBarcodeId = 'secbarcode-' + i;
+
+    let fieldsHtml = '';
+    remainingFields.forEach(h => {
+      const val = row[h];
+      if (val === '' || val === null || val === undefined) return;
+      fieldsHtml += '<div class="label-field"><div class="fk">' + escapeHtml(prettyLabel(h)) + '</div><div class="fv">' + escapeHtml(String(val)) + '</div></div>';
+    });
+
+    page.innerHTML =
+      '<div class="label-top">' +
+        '<div class="label-location">' + escapeHtml(locVal || 'LWH') + '</div>' +
+        (bayVal ? '<div class="label-bay">BAY ' + escapeHtml(bayVal) + '</div>' : '') +
+      '</div>' +
+      '<div class="label-idblock">' +
+        '<div class="id-label">' + escapeHtml(prettyLabel(state.idField || 'ID')) + '</div>' +
+        '<div class="id-value">' + escapeHtml(idVal) + '</div>' +
+      '</div>' +
+      '<div class="label-codes">' +
+        '<svg id="' + barcodeId + '"></svg>' +
+        '<canvas id="' + qrId + '"></canvas>' +
+      '</div>' +
+      (custVal ? (
+        '<div class="label-secondary">' +
+          '<svg id="' + secBarcodeId + '"></svg>' +
+          '<div><div class="sec-label">' + escapeHtml(prettyLabel(state.customerIdField)) + '</div><div class="sec-value">' + escapeHtml(custVal) + '</div></div>' +
+        '</div>'
+      ) : '') +
+      '<div class="label-grid">' + fieldsHtml + '</div>';
+
+    printArea.appendChild(page);
+
+    // Barcode (sync)
+    try {
+      JsBarcode('#' + barcodeId, idVal || ' ', {
+        format: 'CODE128', displayValue: false, margin: 0, height: 45, width: 2
+      });
+    } catch (e) { /* ignore malformed value */ }
+
+    if (custVal) {
+      try {
+        JsBarcode('#' + secBarcodeId, custVal, {
+          format: 'CODE128', displayValue: false, margin: 0, height: 26, width: 1.4
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    // QR (async) — queue promise
+    renderJobs.push(new Promise((resolve) => {
+      const canvas = document.getElementById(qrId);
+      QRCode.toCanvas(canvas, idVal || ' ', { width: 90, margin: 1, color: { dark: '#0F172A', light: '#FFFFFF' } }, () => resolve());
+    }));
+  });
+
+  await Promise.all(renderJobs);
+  // Small delay ensures rendering is flushed before print dialog opens
+  setTimeout(() => window.print(), 80);
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function prettyLabel(h){
+  return String(h)
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+let toastTimer;
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>
