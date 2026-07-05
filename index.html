@@ -101,17 +101,96 @@
   }
   button.ghost-btn:hover{ background:rgba(255,255,255,0.16); }
 
+  /* ---------- Top search bar ---------- */
+  .search-bar-wrap{
+    position:sticky; top:62px; z-index:19;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:14px 20px;
+    box-shadow:var(--shadow);
+  }
+  .search-bar{
+    display:flex; align-items:stretch; gap:10px;
+    max-width:1100px;
+  }
+  .search-col-select{
+    flex:0 0 170px;
+    border:1.5px solid var(--line-strong);
+    border-radius:var(--radius);
+    padding:0 12px;
+    font-size:13.5px; font-weight:600; color:var(--slate);
+    background:var(--paper);
+  }
+  .search-input-wrap{
+    flex:1;
+    display:flex; align-items:center; gap:10px;
+    border:1.5px solid var(--line-strong);
+    border-radius:var(--radius);
+    padding:0 14px;
+    background:var(--paper);
+  }
+  .search-input-wrap:focus-within{ border-color:var(--emerald); }
+  .search-input-wrap svg{ flex-shrink:0; color:var(--slate-light); }
+  .search-input-wrap input{
+    border:none; outline:none; background:transparent;
+    font-size:16px; width:100%; color:var(--ink); font-family:inherit;
+    padding:11px 0;
+  }
+  .search-bar .btn{ flex:0 0 auto; padding:0 22px; font-size:14px; }
+  .browse-all-hint{
+    margin-top:8px; font-size:12px; color:var(--slate);
+  }
+  .browse-all-hint button{
+    background:none; border:none; padding:0; color:var(--emerald-dark);
+    font-weight:700; text-decoration:underline; cursor:pointer; font-family:inherit; font-size:12px;
+  }
+
+  /* ---------- Scanner modal ---------- */
+  .scanner-overlay{
+    position:fixed; inset:0; z-index:200;
+    background:rgba(15,23,42,0.75);
+    display:none; align-items:center; justify-content:center;
+    padding:20px;
+  }
+  .scanner-overlay.show{ display:flex; }
+  .scanner-modal{
+    background:var(--panel);
+    border-radius:14px;
+    overflow:hidden;
+    width:100%; max-width:480px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.4);
+  }
+  .scanner-header{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--ink); color:#fff;
+    padding:12px 16px; font-weight:700; font-size:14px;
+  }
+  .scanner-close{
+    background:none; border:none; color:#fff; font-size:16px; cursor:pointer; padding:2px 6px;
+  }
+  #scannerVideo{
+    width:100%; display:block; background:#000; aspect-ratio:4/3; object-fit:cover;
+  }
+  .scanner-status{
+    padding:12px 16px; font-size:13px; color:var(--slate); text-align:center; background:var(--paper);
+  }
+
   /* ---------- Layout ---------- */
   .layout{
     display:grid;
     grid-template-columns:260px 1fr;
     gap:0;
-    min-height:calc(100vh - 62px);
+    min-height:calc(100vh - 130px);
   }
   @media (max-width:860px){
     .layout{ grid-template-columns:1fr; }
     .filters{ order:2; border-top:1px solid var(--line); border-right:none !important; }
     .main{ order:1; }
+    .search-bar{ flex-wrap:wrap; }
+    .search-col-select{ flex:1 1 100%; }
+  }
+  @media (max-width:860px){
+    .layout{ top:auto; }
   }
 
   .filters{
@@ -120,8 +199,8 @@
     padding:18px 16px;
     display:flex; flex-direction:column; gap:18px;
     align-self:start;
-    position:sticky; top:62px;
-    max-height:calc(100vh - 62px);
+    position:sticky; top:130px;
+    max-height:calc(100vh - 130px);
     overflow-y:auto;
   }
   .filters h2{
@@ -329,28 +408,41 @@
 <header class="app">
   <div class="title-block">
     <h1>LWH Inventory Lookup &amp; Label Printer</h1>
-    <span class="subtitle" id="syncSubtitle">Loading data…</span>
+    <span class="subtitle" id="syncSubtitle">Search by InvRec, BillTo, or any field to pull matching pallets</span>
   </div>
   <div class="spacer"></div>
-  <div class="status-pill">
-    <span class="status-dot loading" id="statusDot"></span>
-    <span id="statusText">Connecting…</span>
-  </div>
-  <button class="ghost-btn" id="refreshBtn" title="Reload from sheet">↻ Refresh</button>
+  <button class="ghost-btn" id="loadAllBtn" title="Load the entire sheet for broad browsing">📋 Load Everything</button>
 </header>
+
+<div class="search-bar-wrap">
+  <div class="search-bar">
+    <select id="searchColumnSelect" class="search-col-select">
+      <option value="">All Fields</option>
+    </select>
+    <div class="search-input-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="quickSearchInput" placeholder="Search by InvRec, BillTo, LWH ID, or anything else…" autocomplete="off">
+    </div>
+    <button class="btn primary" id="searchBtn">Search</button>
+    <button class="btn secondary" id="scanBtn" title="Scan a barcode or QR code">📷 Scan</button>
+  </div>
+</div>
+
+<div class="scanner-overlay" id="scannerOverlay">
+  <div class="scanner-modal">
+    <div class="scanner-header">
+      <span>Scan Barcode or QR Code</span>
+      <button class="scanner-close" id="scannerCloseBtn">✕</button>
+    </div>
+    <video id="scannerVideo" playsinline muted></video>
+    <div class="scanner-status" id="scannerStatus">Starting camera…</div>
+  </div>
+</div>
 
 <div class="layout">
   <aside class="filters">
-    <div>
-      <h2>Search</h2>
-      <div class="search-box">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="globalSearch" placeholder="Search any field…" autocomplete="off">
-      </div>
-    </div>
-
     <div class="filter-row">
-      <h2>Column Filters</h2>
+      <h2>Narrow Results</h2>
       <select id="filterColumnSelect">
         <option value="">+ Add filter by column…</option>
       </select>
@@ -370,7 +462,7 @@
     </div>
 
     <div class="table-wrap" id="tableWrap">
-      <div class="loading-state" id="loadingState">Loading inventory data…</div>
+      <div class="empty-state">🔍 Search above by InvRec, BillTo, or any field to pull up matching pallets.<br><br>Or click <b>Load Everything</b> (top right) to browse the full sheet.</div>
     </div>
   </main>
 </div>
@@ -398,7 +490,6 @@ const state = {
   rows: [],
   filtered: [],
   columnFilters: {},   // { columnName: value }
-  search: '',
   sortKey: null,
   sortDir: 1,
   selected: new Set(), // set of LWH_ID (or row index fallback)
@@ -415,12 +506,20 @@ const RENDER_CAP = 800;
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   registerServiceWorker();
-  loadData();
+  loadHeadersOnly();
 
-  document.getElementById('refreshBtn').addEventListener('click', () => loadData(true));
-  document.getElementById('globalSearch').addEventListener('input', (e) => {
-    state.search = e.target.value.trim().toLowerCase();
-    applyFilters();
+  document.getElementById('loadAllBtn').addEventListener('click', loadEverything);
+  document.getElementById('searchBtn').addEventListener('click', performSearch);
+  document.getElementById('scanBtn').addEventListener('click', openScanner);
+  document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
+  document.getElementById('scannerOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'scannerOverlay') closeScanner();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeScanner();
+  });
+  document.getElementById('quickSearchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') performSearch();
   });
   document.getElementById('filterColumnSelect').addEventListener('change', onFilterColumnChange);
   document.getElementById('filterValueSelect').addEventListener('change', onFilterValueChange);
@@ -437,42 +536,109 @@ function registerServiceWorker(){
 }
 
 /* ============================================================
-   DATA LOADING
+   DATA LOADING — search-first model
+   ------------------------------------------------------------
+   Loading the entire sheet on page load is what caused multi-
+   minute waits on hotspot connections: the JSON payload for a
+   large sheet takes a long time to transfer over a weak signal.
+   Instead, the page loads just the column headers on start (a
+   tiny request), and every actual data pull is either a
+   server-side filtered search (small payload — the normal path
+   for "give me this InvRec's pallets") or an explicit
+   "Load Everything" for when broad browsing is actually wanted.
    ============================================================ */
-function setStatus(mode, text){
-  const dot = document.getElementById('statusDot');
-  const label = document.getElementById('statusText');
-  dot.className = 'status-dot ' + mode;
-  label.textContent = text;
-}
-
-async function loadData(isManualRefresh){
-  setStatus('loading', isManualRefresh ? 'Refreshing…' : 'Connecting…');
+async function loadHeadersOnly(){
   if (!GAS_URL || GAS_URL.indexOf('PASTE_YOUR') === 0) {
-    setStatus('err', 'Not configured');
     renderConfigError();
     return;
   }
+  try {
+    const res = await fetch(GAS_URL + '?action=getHeaders', { cache: 'no-store' });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Unknown error from backend');
+    populateSearchColumnOptions(json.headers);
+  } catch (err) {
+    showToast('Could not reach the sheet — check your connection');
+  }
+}
+
+function populateSearchColumnOptions(headers){
+  const sel = document.getElementById('searchColumnSelect');
+  sel.innerHTML = '<option value="">All Fields</option>' +
+    headers.map(h => '<option value="' + escapeHtml(h) + '">' + escapeHtml(prettyLabel(h)) + '</option>').join('');
+
+  // Default to InvRec if present — matches the most common daily workflow
+  const invRec = headers.find(h => h.toLowerCase().replace(/[_\s]/g,'') === 'invrec');
+  if (invRec) sel.value = invRec;
+}
+
+async function performSearch(){
+  const query = document.getElementById('quickSearchInput').value.trim();
+  const column = document.getElementById('searchColumnSelect').value;
+
+  if (!query) {
+    showToast('Type something to search, or use Load Everything');
+    return;
+  }
+  if (!GAS_URL || GAS_URL.indexOf('PASTE_YOUR') === 0) {
+    renderConfigError();
+    return;
+  }
+
+  document.getElementById('tableWrap').innerHTML = '<div class="loading-state">Searching…</div>';
+  document.getElementById('syncSubtitle').textContent = 'Searching…';
+
+  try {
+    const url = GAS_URL + '?action=search&q=' + encodeURIComponent(query) +
+      (column ? '&column=' + encodeURIComponent(column) : '');
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Unknown error from backend');
+
+    loadResultSet(json.data);
+    const label = column ? prettyLabel(column) : 'all fields';
+    document.getElementById('syncSubtitle').textContent =
+      state.rows.length.toLocaleString() + ' result' + (state.rows.length === 1 ? '' : 's') +
+      ' for "' + query + '" in ' + label + ' · ' + new Date().toLocaleTimeString();
+    showToast(state.rows.length.toLocaleString() + ' result' + (state.rows.length === 1 ? '' : 's') + ' found');
+  } catch (err) {
+    renderFetchError(err.message);
+  }
+}
+
+async function loadEverything(){
+  if (!GAS_URL || GAS_URL.indexOf('PASTE_YOUR') === 0) {
+    renderConfigError();
+    return;
+  }
+  document.getElementById('tableWrap').innerHTML = '<div class="loading-state">Loading the full sheet — this can take a while on a slow connection…</div>';
+  document.getElementById('syncSubtitle').textContent = 'Loading everything…';
+
   try {
     const res = await fetch(GAS_URL + '?action=getData', { cache: 'no-store' });
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Unknown error from backend');
 
-    state.headers = json.data.headers;
-    state.rows = json.data.rows;
-    detectKeyFields();
-    applyFilters();
-    buildColumnFilterOptions();
-
-    setStatus('ok', 'Connected');
-    const now = new Date();
+    loadResultSet(json.data);
     document.getElementById('syncSubtitle').textContent =
-      state.rows.length.toLocaleString() + ' records · synced ' + now.toLocaleTimeString();
-    showToast(isManualRefresh ? 'Data refreshed' : 'Data loaded');
+      state.rows.length.toLocaleString() + ' total records · loaded ' + new Date().toLocaleTimeString();
+    showToast('Loaded ' + state.rows.length.toLocaleString() + ' records');
   } catch (err) {
-    setStatus('err', 'Connection failed');
     renderFetchError(err.message);
   }
+}
+
+function loadResultSet(data){
+  state.headers = data.headers;
+  state.rows = data.rows;
+  state.columnFilters = {};
+  state.sortKey = null;
+  state.selected.clear();
+
+  detectKeyFields();
+  buildColumnFilterOptions();
+  renderActiveFilters();
+  applyFilters();
 }
 
 function detectKeyFields(){
@@ -491,11 +657,75 @@ function renderConfigError(){
 }
 function renderFetchError(msg){
   document.getElementById('tableWrap').innerHTML =
-    '<div class="error-state">⚠ Could not load data.<br><span class="mono" style="font-size:12px;">' + escapeHtml(msg) + '</span><br><button class="btn secondary" onclick="loadData(true)">Try again</button></div>';
+    '<div class="error-state">⚠ Could not load data.<br><span class="mono" style="font-size:12px;">' + escapeHtml(msg) + '</span><br><button class="btn secondary" onclick="performSearch()">Try again</button></div>';
+  document.getElementById('syncSubtitle').textContent = 'Search by InvRec, BillTo, or any field to pull matching pallets';
 }
 
 /* ============================================================
-   FILTERING / SEARCH / SORT
+   CAMERA SCANNING (BarcodeDetector — native, on-device, no
+   internet required; supported on Android Chrome and desktop
+   Chrome/Edge)
+   ============================================================ */
+let scannerStream = null;
+let scannerRafId = null;
+
+function isScannerSupported(){
+  return ('BarcodeDetector' in window) && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+}
+
+async function openScanner(){
+  if (!isScannerSupported()) {
+    showToast('Camera scanning isn\'t supported in this browser — type the code instead');
+    return;
+  }
+
+  const overlay = document.getElementById('scannerOverlay');
+  const video = document.getElementById('scannerVideo');
+  const statusEl = document.getElementById('scannerStatus');
+  overlay.classList.add('show');
+  statusEl.textContent = 'Starting camera…';
+
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = scannerStream;
+    await video.play();
+    statusEl.textContent = 'Point camera at a barcode or QR code…';
+
+    const detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'code_39'] });
+
+    const scanFrame = async () => {
+      if (!scannerStream) return; // modal was closed
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length > 0) {
+          const value = codes[0].rawValue;
+          closeScanner();
+          document.getElementById('quickSearchInput').value = value;
+          showToast('Scanned: ' + value);
+          performSearch();
+          return;
+        }
+      } catch (e) { /* keep trying on transient detection errors */ }
+      scannerRafId = requestAnimationFrame(scanFrame);
+    };
+    scannerRafId = requestAnimationFrame(scanFrame);
+  } catch (err) {
+    statusEl.textContent = 'Could not access camera: ' + err.message;
+  }
+}
+
+function closeScanner(){
+  document.getElementById('scannerOverlay').classList.remove('show');
+  if (scannerRafId) cancelAnimationFrame(scannerRafId);
+  scannerRafId = null;
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(t => t.stop());
+    scannerStream = null;
+  }
+}
+
+/* ============================================================
+   FILTERING (narrow current result set) / SORT
    ============================================================ */
 function buildColumnFilterOptions(){
   const sel = document.getElementById('filterColumnSelect');
@@ -566,12 +796,6 @@ function applyFilters(){
     rows = rows.filter(r => String(r[col] ?? '').trim() === val);
   });
 
-  if (state.search) {
-    rows = rows.filter(r =>
-      state.headers.some(h => String(r[h] ?? '').toLowerCase().includes(state.search))
-    );
-  }
-
   if (state.sortKey) {
     const key = state.sortKey, dir = state.sortDir;
     rows = rows.slice().sort((a,b) => {
@@ -604,7 +828,7 @@ function renderCounts(){
 function renderTable(){
   const wrap = document.getElementById('tableWrap');
 
-  if (state.rows.length === 0) return; // still loading / error already shown
+  if (state.rows.length === 0) return; // nothing searched/loaded yet — initial empty state stays as-is
 
   if (state.filtered.length === 0) {
     wrap.innerHTML = '<div class="empty-state">No records match your search or filters.</div>';
