@@ -172,79 +172,46 @@
 
   /* ---------- Layout ---------- */
   .layout{
-    display:grid;
-    grid-template-columns:260px 1fr;
-    gap:0;
     min-height:calc(100vh - 130px);
   }
   @media (max-width:860px){
-    .layout{ grid-template-columns:1fr; }
-    .filters{ order:2; border-top:1px solid var(--line); border-right:none !important; }
-    .main{ order:1; }
     .search-bar{ flex-wrap:wrap; }
   }
-  @media (max-width:860px){
-    .layout{ top:auto; }
-  }
 
-  .filters{
-    background:var(--panel);
-    border-right:1px solid var(--line);
-    padding:18px 16px;
-    display:flex; flex-direction:column; gap:18px;
-    align-self:start;
-    position:sticky; top:130px;
-    max-height:calc(100vh - 130px);
-    overflow-y:auto;
+  /* ---------- Inline "Narrow Results" filter (toolbar-integrated) ---------- */
+  .filter-toggle-wrap{ position:relative; }
+  .filter-toggle-btn{
+    border:1.5px solid var(--line-strong); background:var(--panel); color:var(--slate);
+    border-radius:8px; padding:9px 14px; font-size:13px; font-weight:700; cursor:pointer;
+    font-family:inherit; display:inline-flex; align-items:center; gap:6px;
   }
-  .filters h2{
-    font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
-    color:var(--slate); margin:0 0 10px 0; font-weight:700;
+  .filter-toggle-btn:hover{ border-color:var(--emerald); color:var(--emerald-dark); }
+  .filter-toggle-btn.has-active{ background:var(--emerald-wash); border-color:#A7F3D0; color:var(--emerald-dark); }
+  .filter-popover{
+    display:none;
+    position:absolute; top:calc(100% + 6px); left:0; z-index:15;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 10px 30px rgba(15,23,42,0.15);
+    padding:14px; width:260px;
   }
-  .search-box{
-    display:flex; align-items:center; gap:8px;
-    border:1.5px solid var(--line-strong);
-    border-radius:var(--radius);
-    padding:9px 12px;
-    background:var(--paper);
+  .filter-popover.show{ display:block; }
+  .filter-popover select{
+    width:100%; border:1.5px solid var(--line-strong); border-radius:8px; padding:8px 10px;
+    font-size:13px; background:var(--panel); color:var(--ink); font-family:inherit; margin-bottom:8px;
   }
-  .search-box input{
-    border:none; outline:none; background:transparent;
-    font-size:14px; width:100%; color:var(--ink); font-family:inherit;
-  }
-  .search-box svg{ flex-shrink:0; color:var(--slate-light); }
-
-  .filter-row{ display:flex; flex-direction:column; gap:8px; }
-  select, .add-filter-btn{
-    width:100%;
-    border:1.5px solid var(--line-strong);
-    border-radius:8px;
-    padding:8px 10px;
-    font-size:13px;
-    background:var(--panel);
-    color:var(--ink);
-    font-family:inherit;
-  }
-  .add-filter-btn{ cursor:pointer; color:var(--slate); font-weight:600; text-align:left; }
-  .add-filter-btn:hover{ border-color:var(--emerald); color:var(--emerald-dark); }
-
-  .active-filters{ display:flex; flex-direction:column; gap:6px; }
+  .active-filters-inline{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .chip{
-    display:flex; align-items:center; justify-content:space-between; gap:8px;
-    background:var(--emerald-wash);
-    border:1px solid #A7F3D0;
-    color:var(--emerald-dark);
-    border-radius:8px;
-    padding:6px 10px;
-    font-size:12.5px; font-weight:600;
+    display:flex; align-items:center; gap:6px;
+    background:var(--emerald-wash); border:1px solid #A7F3D0; color:var(--emerald-dark);
+    border-radius:999px; padding:5px 6px 5px 12px; font-size:12.5px; font-weight:600;
   }
   .chip button{
     border:none; background:none; cursor:pointer; color:var(--emerald-dark);
-    font-size:14px; line-height:1; padding:0;
+    font-size:14px; line-height:1; padding:2px;
   }
   .clear-all{
     font-size:12px; color:var(--slate); text-decoration:underline; cursor:pointer;
-    background:none; border:none; padding:0; font-family:inherit; text-align:left;
+    background:none; border:none; padding:0; font-family:inherit;
   }
 
   /* ---------- Main / table ---------- */
@@ -432,23 +399,25 @@
 </div>
 
 <div class="layout">
-  <aside class="filters">
-    <div class="filter-row">
-      <h2>Narrow Results</h2>
-      <select id="filterColumnSelect">
-        <option value="">+ Add filter by column…</option>
-      </select>
-      <select id="filterValueSelect" style="display:none;">
-        <option value="">Select value…</option>
-      </select>
-      <div class="active-filters" id="activeFilters"></div>
-      <button class="clear-all" id="clearAllFilters" style="display:none;">Clear all filters</button>
-    </div>
-  </aside>
-
   <main class="main">
     <div class="toolbar">
       <div class="result-count"><b id="resultCount">0</b> <span id="resultLabel">records</span></div>
+
+      <div class="filter-toggle-wrap">
+        <button class="filter-toggle-btn" id="filterToggleBtn">+ Narrow Results</button>
+        <div class="filter-popover" id="filterPopover">
+          <select id="filterColumnSelect">
+            <option value="">+ Add filter by column…</option>
+          </select>
+          <select id="filterValueSelect" style="display:none;">
+            <option value="">Select value…</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="active-filters-inline" id="activeFilters"></div>
+      <button class="clear-all" id="clearAllFilters" style="display:none;">Clear all filters</button>
+
       <div class="spacer"></div>
       <button class="btn secondary" id="exportCsvBtn" disabled>⬇ Export CSV</button>
     </div>
@@ -515,6 +484,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('filterColumnSelect').addEventListener('change', onFilterColumnChange);
   document.getElementById('filterValueSelect').addEventListener('change', onFilterValueChange);
   document.getElementById('clearAllFilters').addEventListener('click', clearAllFilters);
+  document.getElementById('filterToggleBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('filterPopover').classList.toggle('show');
+  });
+  document.addEventListener('click', (e) => {
+    const wrap = document.querySelector('.filter-toggle-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('filterPopover').classList.remove('show');
+    }
+  });
   document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
   document.getElementById('printLabelsBtn').addEventListener('click', printSelectedLabels);
   document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
@@ -727,6 +706,7 @@ function onFilterValueChange(e){
   document.getElementById('filterColumnSelect').value = '';
   e.target.style.display = 'none';
   e.target.value = '';
+  document.getElementById('filterPopover').classList.remove('show');
 }
 
 function renderActiveFilters(){
@@ -743,7 +723,11 @@ function renderActiveFilters(){
       applyFilters();
     });
   });
-  document.getElementById('clearAllFilters').style.display = keys.length ? 'block' : 'none';
+  document.getElementById('clearAllFilters').style.display = keys.length ? 'inline' : 'none';
+
+  const toggleBtn = document.getElementById('filterToggleBtn');
+  toggleBtn.classList.toggle('has-active', keys.length > 0);
+  toggleBtn.textContent = keys.length > 0 ? '⚙ Filters (' + keys.length + ')' : '+ Narrow Results';
 }
 
 function clearAllFilters(){
